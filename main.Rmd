@@ -1,0 +1,101 @@
+---
+title: "Predicting Housing Prices with SARIMA"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+
+#Libraries
+require(forecast)
+```
+
+```{r}
+#load csv
+data = read.csv("CSUSHPINSA.csv")
+head(data)
+```
+
+```{r}
+names(CaseShiller)[2] <- "Units"
+CSUnits <- CaseShiller$Units
+tsCaseShiller <- ts(CSUnits, start = c(2000, 1), end = c(2026, 12), frequency = 12)
+tsCaseShiller
+plot(tsCaseShiller)
+acf(tsCaseShiller)
+```
+
+```{r}
+#create arima model
+avg_model = Arima(tsCaseShiller, c(0, 0, 0))
+str(avg_model)
+avg_forecast = forecast(avg_model)
+#check accuracy
+accuracy(avg_model)
+str(avg_forecast)
+avg_forecast$mean
+avg_forecast = forecast(avg_model, 48, level = c(50, 95)) #specify time-steps into future with 50% of imperical data
+```
+
+
+```{r}
+plot(forecast(tsCaseShiller, 12), xlab = "Date", ylab = "Units", main = "ARIMA Forecast for Case-Shiller Index")
+lines(avg_forecast$mean, col = "red")
+```
+
+```{r}
+plot(avg_forecast) #made using base R
+autoplot(avg_forecast) ##made using ggplot
+```
+
+```{r}
+arima_model = auto.arima(tsCaseShiller, seasonal = FALSE)
+arima_forecast = forecast(arima_model)
+plot(arima_forecast)
+
+sarima_model = auto.arima(tsCaseShiller, seasonal = TRUE)
+sarima_forecast = forecast(sarima_model,
+                           h = 36,
+                           level = c(80, 99))#almost entire set of possible states
+sarima_forecast
+arima_forecast
+```
+
+
+```{r}
+#Check assumptions of normality & Autocorrelation
+qqnorm(sarima_forecast$residuals)
+qqline(sarima_forecast$residuals)
+Box.test(sarima_forecast$residuals, type = "Ljung-Box")
+```
+
+```{r}
+#Seasonal plot
+ggseasonplot(tsCaseShiller, year.labels = TRUE, col = rainbow(15))
+```
+
+```{r}
+#Check accuracy
+fitAccuracy <- data.frame(accuracy(sarima_forecast))
+fitAccuracy2 <- data.frame(accuracy(arima_forecast))
+fitAccuracyFinal <- rbind(fitAccuracy, fitAccuracy2)
+fitAccuracyFinal
+```
+
+```{r}
+plot(forecast(sarima_forecast, 12),xlab = "Date", ylab = "Units", main = "Sarima Forecast for Case-Shiller Index")
+
+#Get forecasted values
+pred_values <- data.frame(forecast(sarima_forecast, 12))
+
+#Log transformed data
+pred_values2 <- data.frame(forecast(sarima_forecast, 12))
+pred_values2[,1:5] <- exp(pred_values2[,1:5])
+
+#Now merge predictions
+mergedDF <- data.frame(Date = rownames(pred_values), Original_Data_Forecast = pred_values$Point.Forecast, Log_Transformed_Data_Forecast = pred_values2$Point.Forecast, Difference = round(pred_values$Point.Forecast - pred_values2$Point.Forecast, 2))
+mergedDF
+```
